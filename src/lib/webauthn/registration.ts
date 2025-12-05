@@ -5,7 +5,7 @@
 import { decode } from 'cbor-x';
 import type { P256PublicKey, PasskeyCreationResult, WebAuthnErrorType } from '../types';
 import { WebAuthnError } from '../types';
-import { base64UrlToBuffer, bufferToBase64Url, bufferToHex, generateChallenge } from './utils';
+import { bufferToBase64Url, generateChallenge } from './utils';
 
 /**
  * Parse public key from attestation object using proper CBOR decoding
@@ -135,8 +135,7 @@ export async function authenticateWithPasskey(): Promise<PasskeyCreationResult> 
  */
 export async function createPasskey(
   username: string,
-  displayName: string,
-  excludeCredentialIds?: string[]
+  displayName: string
 ): Promise<PasskeyCreationResult> {
   try {
     // Check if WebAuthn is supported
@@ -158,12 +157,6 @@ export async function createPasskey(
 
     // Generate challenge
     const challenge = generateChallenge(32);
-
-    // Prepare exclude credentials to prevent duplicate passkeys
-    const excludeCredentials = excludeCredentialIds?.map(id => ({
-      type: 'public-key' as const,
-      id: base64UrlToBuffer(id) as BufferSource,
-    }));
 
     // Create credential options
     const credential = await navigator.credentials.create({
@@ -193,7 +186,6 @@ export async function createPasskey(
           userVerification: 'required',
           residentKey: 'required',
         },
-        excludeCredentials: excludeCredentials && excludeCredentials.length > 0 ? excludeCredentials : undefined,
         timeout: 60000,
         attestation: 'none',
       },

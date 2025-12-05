@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import type { WalletAccount, WebAuthnSignature } from '@/lib/types';
 import { createPasskey, authenticateWithPasskey, isPlatformAuthenticatorAvailable, isWebAuthnSupported } from '@/lib/webauthn/registration';
 import { signMessage } from '@/lib/webauthn/authentication';
-import { saveCredential, getDefaultAccount, updateLastUsed, getCredential, getAllCredentials } from '@/lib/storage/credentials';
+import { saveCredential, getDefaultAccount, updateLastUsed, getCredential } from '@/lib/storage/credentials';
 
 export function usePasskey() {
   const [loading, setLoading] = useState(false);
@@ -92,11 +92,9 @@ export function usePasskey() {
     setError(null);
 
     try {
-      // Get all existing credential IDs to exclude them
-      const existingCredentials = await getAllCredentials();
-      const excludeIds = existingCredentials.map(c => c.id);
-
-      const result = await createPasskey(username, username, excludeIds);
+      // Don't use excludeCredentials - allow multiple wallets with different usernames
+      // The authenticator will handle preventing true duplicates (same username)
+      const result = await createPasskey(username, username);
 
       // Save to IndexedDB
       const credential = {
