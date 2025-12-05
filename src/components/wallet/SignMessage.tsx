@@ -5,7 +5,6 @@
 'use client';
 
 import { useState } from 'react';
-import { keccak256, toBytes } from 'viem';
 import { toast } from 'sonner';
 import { CheckCircle2 } from 'lucide-react';
 import {
@@ -33,7 +32,6 @@ interface SignMessageProps {
 export function SignMessage({ account, onClose }: SignMessageProps) {
   const [message, setMessage] = useState('');
   const [signedMessage, setSignedMessage] = useState('');
-  const [messageHash, setMessageHash] = useState('');
   const [signature, setSignature] = useState<WebAuthnSignature | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'failed' | null>(null);
   const { signMessage, loading } = usePasskey();
@@ -49,11 +47,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
 
       const sig = await signMessage(message);
 
-      // Calculate message hash using keccak256 (EVM-compatible)
-      const hashHex = keccak256(toBytes(message));
-
       setSignedMessage(message);
-      setMessageHash(hashHex);
       setSignature(sig);
       setVerificationStatus(null);
 
@@ -121,8 +115,15 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     }
   };
 
-  const getContractParameters = () => {
+  const getWebAuthnParameters = () => {
     if (!signature) return null;
+
+    // Convert byte arrays to 0x hex strings
+    const toHex = (bytes: Uint8Array): string => {
+      return '0x' + Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
 
     // Convert byte arrays to 0x hex strings (padded to 32 bytes / 64 hex chars)
     const toHex32 = (bytes: Uint8Array): string => {
@@ -133,23 +134,27 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     };
 
     return {
-      messageHash: messageHash,
+      challenge: `"${signedMessage}"`,
       r: toHex32(signature.r),
       s: toHex32(signature.s),
-      px: toHex32(account.publicKeyX),
-      py: toHex32(account.publicKeyY),
+      challengeIndex: signature.challengeIndex.toString(),
+      typeIndex: signature.typeIndex.toString(),
+      authenticatorData: toHex(signature.authenticatorData),
+      clientDataJSON: signature.clientDataJSON,
+      qx: toHex32(account.publicKeyX),
+      qy: toHex32(account.publicKeyY),
     };
   };
 
-  const copyContractParameters = async () => {
-    const params = getContractParameters();
+  const copyWebAuthnParameters = async () => {
+    const params = getWebAuthnParameters();
     if (!params) return;
 
-    const formatted = `verifySignature(\n  ${params.messageHash}, // messageHash\n  ${params.r}, // r\n  ${params.s}, // s\n  ${params.px}, // px\n  ${params.py}  // py\n)`;
+    const formatted = JSON.stringify(params, null, 2);
 
     try {
       await navigator.clipboard.writeText(formatted);
-      toast.success('Contract parameters copied to clipboard');
+      toast.success('WebAuthn parameters copied to clipboard');
     } catch (err) {
       toast.error('Failed to copy to clipboard');
     }
@@ -249,25 +254,6 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                     </div>
                     <code className="block p-3 bg-muted rounded-md text-xs break-all">
                       {signedMessage}
-                    </code>
-                  </div>
-
-                  <Separator />
-
-                  {/* Message Hash */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Message Hash (keccak256)</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copySignature(messageHash, 'Message Hash')}
-                      >
-                        Copy
-                      </Button>
-                    </div>
-                    <code className="block p-3 bg-muted rounded-md text-xs break-all">
-                      {messageHash}
                     </code>
                   </div>
 
@@ -390,129 +376,38 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                 </CardContent>
               </Card>
 
-              {/* Contract Parameters for On-Chain Verification */}
+              {/* OpenZeppelin WebAuthn Parameters */}
               <Card className="border-blue-200 bg-blue-50/50">
                 <CardContent className="pt-6 space-y-4">
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <h4 className="text-sm font-semibold text-blue-900">
-                        On-Chain Verification Parameters
+                        OpenZeppelin WebAuthn Parameters
                       </h4>
                       <p className="text-xs text-blue-700 mt-1">
-                        Use these parameters to verify the signature on-chain (Etherscan, Remix, Chisel)
+                        Use these parameters with OpenZeppelin's WebAuthn library
                       </p>
                     </div>
                     <Button
-                      onClick={copyContractParameters}
+                      onClick={copyWebAuthnParameters}
                       variant="outline"
                       size="sm"
                       className="border-blue-300 hover:bg-blue-100"
                     >
-                      Copy All
+                      Copy JSON
                     </Button>
                   </div>
 
                   {(() => {
-                    const params = getContractParameters();
+                    const params = getWebAuthnParameters();
                     if (!params) return null;
 
                     return (
-                      <>
-                        {/* Message Hash */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-blue-900">
-                              messageHash (bytes32)
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copySignature(params.messageHash, 'messageHash')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {params.messageHash}
-                          </code>
-                        </div>
-
-                        <Separator />
-
-                        {/* R */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-blue-900">r (uint256)</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copySignature(params.r, 'r')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {params.r}
-                          </code>
-                        </div>
-
-                        <Separator />
-
-                        {/* S */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-blue-900">s (uint256)</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copySignature(params.s, 's')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {params.s}
-                          </code>
-                        </div>
-
-                        <Separator />
-
-                        {/* PX */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-blue-900">px (uint256)</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copySignature(params.px, 'px')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {params.px}
-                          </code>
-                        </div>
-
-                        <Separator />
-
-                        {/* PY */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-blue-900">py (uint256)</span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copySignature(params.py, 'py')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {params.py}
-                          </code>
-                        </div>
-                      </>
+                      <div className="space-y-2">
+                        <code className="block p-4 bg-white rounded-md text-xs break-all font-mono whitespace-pre-wrap">
+                          {JSON.stringify(params, null, 2)}
+                        </code>
+                      </div>
                     );
                   })()}
                 </CardContent>
@@ -524,7 +419,6 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                     setSignature(null);
                     setVerificationStatus(null);
                     setSignedMessage('');
-                    setMessageHash('');
                   }}
                   variant="outline"
                   className="flex-1"

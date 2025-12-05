@@ -2,10 +2,9 @@
  * WebAuthn passkey authentication (signing)
  */
 
-import { keccak256, toBytes } from 'viem';
 import type { WebAuthnSignature, WebAuthnErrorType } from '../types';
 import { WebAuthnError } from '../types';
-import { base64UrlToBuffer, findChallengeOffset } from './utils';
+import { base64UrlToBuffer, findChallengeOffset, findChallengeIndex, findTypeIndex } from './utils';
 
 /**
  * Pad byte array to 32 bytes
@@ -152,6 +151,10 @@ export async function signWithPasskey(
     // Calculate challenge offset for efficient on-chain verification
     const challengeOffset = findChallengeOffset(clientDataJSON, challenge);
 
+    // Calculate indices for OpenZeppelin WebAuthn library
+    const challengeIndex = findChallengeIndex(clientDataJSON);
+    const typeIndex = findTypeIndex(clientDataJSON);
+
     return {
       r,
       s,
@@ -159,6 +162,8 @@ export async function signWithPasskey(
       clientDataJSON,
       clientDataJSONBytes,
       challengeOffset,
+      challengeIndex,
+      typeIndex,
       originalDER: signature,
     };
   } catch (error) {
@@ -334,13 +339,9 @@ export async function signMessage(
   message: string,
   credentialId: string
 ): Promise<WebAuthnSignature> {
-  // Hash the message with keccak256 to use as challenge (EVM-compatible)
-  const messageHash = keccak256(toBytes(message));
-
-  // Convert hex string to Uint8Array (remove '0x' prefix)
-  const challenge = new Uint8Array(
-    messageHash.slice(2).match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-  );
+  // Use raw message bytes as challenge (for OpenZeppelin WebAuthn library)
+  const encoder = new TextEncoder();
+  const challenge = encoder.encode(message);
 
   return signWithPasskey(challenge, credentialId);
 }

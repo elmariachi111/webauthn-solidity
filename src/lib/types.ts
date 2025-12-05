@@ -36,6 +36,10 @@ export interface WebAuthnSignature {
   clientDataJSONBytes: Uint8Array;
   /** Offset of challenge in clientDataJSON */
   challengeOffset: number;
+  /** Index where "challenge" key starts in clientDataJSON (for OpenZeppelin WebAuthn) */
+  challengeIndex: number;
+  /** Index where "type" key starts in clientDataJSON (for OpenZeppelin WebAuthn) */
+  typeIndex: number;
   /** Original DER-encoded signature from authenticator (for debugging) */
   originalDER?: Uint8Array;
 }

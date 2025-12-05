@@ -78,6 +78,30 @@ export function findChallengeOffset(clientDataJSON: string, challenge: Uint8Arra
 }
 
 /**
+ * Find the offset of the "challenge" key in clientDataJSON
+ * Returns the index where '"challenge":"' starts
+ */
+export function findChallengeIndex(clientDataJSON: string): number {
+  const offset = clientDataJSON.indexOf('"challenge":"');
+  if (offset === -1) {
+    throw new Error('"challenge" key not found in clientDataJSON');
+  }
+  return offset;
+}
+
+/**
+ * Find the offset of the "type" key in clientDataJSON
+ * Returns the index where '"type":"' starts
+ */
+export function findTypeIndex(clientDataJSON: string): number {
+  const offset = clientDataJSON.indexOf('"type":"');
+  if (offset === -1) {
+    throw new Error('"type" key not found in clientDataJSON');
+  }
+  return offset;
+}
+
+/**
  * Concatenate multiple Uint8Arrays
  */
 export function concatUint8Arrays(...arrays: Uint8Array[]): Uint8Array {
