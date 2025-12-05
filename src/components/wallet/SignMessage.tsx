@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { CheckCircle2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -18,9 +19,10 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { WalletAccount, WebAuthnSignature } from '@/lib/types';
 import { usePasskey } from '@/hooks/usePasskey';
-import { formatSignatureForChain } from '@/lib/webauthn/authentication';
+import { formatSignatureForChain, verifySignature } from '@/lib/webauthn/authentication';
 
 interface SignMessageProps {
   account: WalletAccount;
@@ -29,7 +31,10 @@ interface SignMessageProps {
 
 export function SignMessage({ account, onClose }: SignMessageProps) {
   const [message, setMessage] = useState('');
+  const [signedMessage, setSignedMessage] = useState('');
+  const [messageHash, setMessageHash] = useState('');
   const [signature, setSignature] = useState<WebAuthnSignature | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'failed' | null>(null);
   const { signMessage, loading } = usePasskey();
 
   const handleSign = async () => {
@@ -43,12 +48,60 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
 
       const sig = await signMessage(message);
 
-      toast.success('Message signed successfully!', { id: 'sign' });
+      // Calculate message hash
+      const encoder = new TextEncoder();
+      const data = encoder.encode(message);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      setSignedMessage(message);
+      setMessageHash(hashHex);
       setSignature(sig);
+      setVerificationStatus(null);
+
+      toast.success('Message signed successfully!', { id: 'sign' });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to sign message', {
         id: 'sign',
       });
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!signature || !signedMessage) return;
+
+    try {
+      setVerificationStatus('pending');
+
+      console.log('Starting verification...');
+      console.log('Message:', signedMessage);
+      console.log('Account address:', account.address);
+
+      const isValid = await verifySignature(
+        signedMessage,
+        {
+          r: signature.r,
+          s: signature.s,
+          authenticatorData: signature.authenticatorData,
+          clientDataJSON: signature.clientDataJSON,
+          clientDataJSONBytes: signature.clientDataJSONBytes,
+          originalDER: signature.originalDER,
+        },
+        { x: account.publicKeyX, y: account.publicKeyY }
+      );
+
+      if (isValid) {
+        setVerificationStatus('verified');
+        toast.success('Signature verified successfully!');
+      } else {
+        setVerificationStatus('failed');
+        toast.error('Signature verification failed!');
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
+      setVerificationStatus('failed');
+      toast.error('Failed to verify signature');
     }
   };
 
@@ -112,13 +165,87 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Signature</h3>
-                <Button onClick={copyFullSignature} variant="outline" size="sm">
-                  Copy All
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleVerify}
+                    variant="default"
+                    size="sm"
+                    disabled={verificationStatus === 'pending'}
+                  >
+                    {verificationStatus === 'pending' ? 'Verifying...' : 'Verify Signature'}
+                  </Button>
+                  <Button onClick={copyFullSignature} variant="outline" size="sm">
+                    Copy All
+                  </Button>
+                </div>
               </div>
+
+              {/* Verification Result */}
+              {verificationStatus === 'verified' && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    <div className="space-y-1">
+                      <p className="font-medium">Signature verified successfully!</p>
+                      <p className="text-sm">
+                        The message was rightfully signed by public key:
+                      </p>
+                      <code className="text-xs break-all block mt-1">
+                        {account.address}
+                      </code>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {verificationStatus === 'failed' && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertDescription className="text-red-800">
+                    Signature verification failed! The signature does not match the message or public key.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <Card>
                 <CardContent className="pt-6 space-y-4">
+                  {/* Signed Message */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Signed Message</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copySignature(signedMessage, 'Message')}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    <code className="block p-3 bg-muted rounded-md text-xs break-all">
+                      {signedMessage}
+                    </code>
+                  </div>
+
+                  <Separator />
+
+                  {/* Message Hash */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Message Hash (SHA-256)</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copySignature(messageHash, 'Message Hash')}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    <code className="block p-3 bg-muted rounded-md text-xs break-all">
+                      {messageHash}
+                    </code>
+                  </div>
+
+                  <Separator />
+
                   {/* R Value */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -237,7 +364,16 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
               </Card>
 
               <div className="flex gap-2">
-                <Button onClick={() => setSignature(null)} variant="outline" className="flex-1">
+                <Button
+                  onClick={() => {
+                    setSignature(null);
+                    setVerificationStatus(null);
+                    setSignedMessage('');
+                    setMessageHash('');
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
                   Sign Another Message
                 </Button>
                 <Button onClick={onClose} variant="default" className="flex-1">

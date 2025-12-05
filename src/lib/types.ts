@@ -32,8 +32,12 @@ export interface WebAuthnSignature {
   authenticatorData: Uint8Array;
   /** Client data JSON from WebAuthn response */
   clientDataJSON: string;
+  /** Client data JSON raw bytes (for verification) */
+  clientDataJSONBytes: Uint8Array;
   /** Offset of challenge in clientDataJSON */
   challengeOffset: number;
+  /** Original DER-encoded signature from authenticator (for debugging) */
+  originalDER?: Uint8Array;
 }
 
 /**
