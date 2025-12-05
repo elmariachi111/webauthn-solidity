@@ -16,9 +16,10 @@ import { SignMessage } from './SignMessage';
 
 interface WalletDashboardProps {
   account: WalletAccount;
+  onLogout?: () => void;
 }
 
-export function WalletDashboard({ account }: WalletDashboardProps) {
+export function WalletDashboard({ account, onLogout }: WalletDashboardProps) {
   const [showSignMessage, setShowSignMessage] = useState(false);
 
   const publicKey = formatPublicKey(account.publicKeyX, account.publicKeyY);
@@ -125,6 +126,18 @@ export function WalletDashboard({ account }: WalletDashboardProps) {
                 Copy Public Key
               </Button>
             </div>
+            {onLogout && (
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={() => {
+                  onLogout();
+                  toast.success('Logged out successfully');
+                }}
+              >
+                Logout
+              </Button>
+            )}
           </div>
 
           {/* Security Badge */}

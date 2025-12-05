@@ -5,7 +5,7 @@
 import { decode } from 'cbor-x';
 import type { P256PublicKey, PasskeyCreationResult, WebAuthnErrorType } from '../types';
 import { WebAuthnError } from '../types';
-import { bufferToBase64Url, bufferToHex, generateChallenge } from './utils';
+import { base64UrlToBuffer, bufferToBase64Url, bufferToHex, generateChallenge } from './utils';
 
 /**
  * Parse public key from attestation object using proper CBOR decoding
@@ -64,11 +64,79 @@ function parsePublicKeyFromAttestation(attestationObject: ArrayBuffer): P256Publ
 }
 
 /**
+ * Authenticate with an existing passkey (for returning users)
+ * This uses the browser's native passkey picker to select from available passkeys
+ */
+export async function authenticateWithPasskey(): Promise<PasskeyCreationResult> {
+  try {
+    // Check if WebAuthn is supported
+    if (!window.PublicKeyCredential) {
+      throw new WebAuthnError(
+        'NOT_SUPPORTED' as WebAuthnErrorType,
+        'WebAuthn is not supported in this browser'
+      );
+    }
+
+    // Generate a challenge for authentication
+    const challenge = generateChallenge(32);
+
+    // Get credential - WITHOUT allowCredentials to show native picker
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: challenge as BufferSource,
+        rpId: typeof window !== 'undefined' ? window.location.hostname : 'localhost',
+        userVerification: 'required',
+        timeout: 60000,
+      },
+    }) as PublicKeyCredential | null;
+
+    if (!assertion) {
+      throw new WebAuthnError(
+        'USER_CANCELLED' as WebAuthnErrorType,
+        'Authentication was cancelled or failed'
+      );
+    }
+
+    // For authentication, we need to get the public key from the stored credential
+    // Since we can't extract it from the assertion, we'll need to look it up
+
+    // Use assertion.id (already base64url encoded) to match what we stored
+    // Note: assertion.id is the base64url-encoded version of assertion.rawId
+    return {
+      credentialId: assertion.id,
+      publicKey: { x: new Uint8Array(0), y: new Uint8Array(0) }, // Placeholder - will be filled from storage
+      address: '', // Will be filled from storage
+    };
+  } catch (error) {
+    if (error instanceof WebAuthnError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      if (error.name === 'NotAllowedError') {
+        throw new WebAuthnError(
+          'USER_CANCELLED' as WebAuthnErrorType,
+          'User cancelled the authentication',
+          error
+        );
+      }
+    }
+
+    throw new WebAuthnError(
+      'UNKNOWN' as WebAuthnErrorType,
+      `Failed to authenticate with passkey: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error instanceof Error ? error : undefined
+    );
+  }
+}
+
+/**
  * Create a new passkey credential
  */
 export async function createPasskey(
   username: string,
-  displayName: string
+  displayName: string,
+  excludeCredentialIds?: string[]
 ): Promise<PasskeyCreationResult> {
   try {
     // Check if WebAuthn is supported
@@ -90,6 +158,12 @@ export async function createPasskey(
 
     // Generate challenge
     const challenge = generateChallenge(32);
+
+    // Prepare exclude credentials to prevent duplicate passkeys
+    const excludeCredentials = excludeCredentialIds?.map(id => ({
+      type: 'public-key' as const,
+      id: base64UrlToBuffer(id) as BufferSource,
+    }));
 
     // Create credential options
     const credential = await navigator.credentials.create({
@@ -119,6 +193,7 @@ export async function createPasskey(
           userVerification: 'required',
           residentKey: 'required',
         },
+        excludeCredentials: excludeCredentials && excludeCredentials.length > 0 ? excludeCredentials : undefined,
         timeout: 60000,
         attestation: 'none',
       },

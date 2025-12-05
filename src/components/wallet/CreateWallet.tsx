@@ -20,7 +20,7 @@ interface CreateWalletProps {
 
 export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
   const [username, setUsername] = useState('');
-  const { createWallet, loading, error } = usePasskey();
+  const { createWallet, discoverPasskey, loading, error } = usePasskey();
   const [createdAddress, setCreatedAddress] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,6 +46,25 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create wallet', {
         id: 'create-wallet',
+      });
+    }
+  };
+
+  const handleSignIn = async () => {
+    try {
+      toast.loading('Signing in with passkey...', { id: 'sign-in' });
+
+      const account = await discoverPasskey();
+
+      toast.success('Signed in successfully!', { id: 'sign-in' });
+      setCreatedAddress(account.address);
+
+      if (onWalletCreated) {
+        onWalletCreated();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sign in', {
+        id: 'sign-in',
       });
     }
   };
@@ -82,44 +101,71 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create Passkey Wallet</CardTitle>
+        <CardTitle>Passkey Wallet</CardTitle>
         <CardDescription>
-          Create a new Ethereum wallet secured by your device&apos;s biometric authentication
+          Create a new wallet or sign in with an existing passkey
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-4">
+          {/* Sign In Button */}
           <div className="space-y-2">
-            <Label htmlFor="username">Username / Email</Label>
-            <Input
-              id="username"
-              type="text"
-              placeholder="your@email.com"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+            <Button
+              onClick={handleSignIn}
+              className="w-full"
               disabled={loading}
-            />
-            <p className="text-sm text-muted-foreground">
-              This will be used to identify your passkey
+              variant="default"
+            >
+              {loading ? 'Signing In...' : 'Sign In with Existing Passkey'}
+            </Button>
+            <p className="text-sm text-muted-foreground text-center">
+              Use your saved passkey from this device or iCloud Keychain
             </p>
           </div>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Creating Wallet...' : 'Create Wallet'}
-          </Button>
-
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>✓ Private key stored in secure hardware</p>
-            <p>✓ No seed phrase to manage</p>
-            <p>✓ Sign with Face ID / Touch ID / fingerprint</p>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or create new</span>
+            </div>
           </div>
-        </form>
+
+          {/* Create New Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Username / Email</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="your@email.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={loading}
+              />
+              <p className="text-sm text-muted-foreground">
+                This will be used to identify your new passkey
+              </p>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error.message}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading} variant="outline">
+              {loading ? 'Creating Wallet...' : 'Create New Wallet'}
+            </Button>
+
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>✓ Private key stored in secure hardware</p>
+              <p>✓ No seed phrase to manage</p>
+              <p>✓ Sign with Face ID / Touch ID / fingerprint</p>
+            </div>
+          </form>
+        </div>
       </CardContent>
     </Card>
   );

@@ -34,6 +34,10 @@ export default function Home() {
     loadAccount();
   }, []);
 
+  const handleLogout = () => {
+    setAccount(null);
+  };
+
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -48,7 +52,7 @@ export default function Home() {
       <CompatibilityCheck />
 
       {account ? (
-        <WalletDashboard account={account} />
+        <WalletDashboard account={account} onLogout={handleLogout} />
       ) : (
         <CreateWallet onWalletCreated={loadAccount} />
       )}

@@ -6,9 +6,9 @@
 
 import { useState, useEffect } from 'react';
 import type { WalletAccount, WebAuthnSignature } from '@/lib/types';
-import { createPasskey, isPlatformAuthenticatorAvailable, isWebAuthnSupported } from '@/lib/webauthn/registration';
+import { createPasskey, authenticateWithPasskey, isPlatformAuthenticatorAvailable, isWebAuthnSupported } from '@/lib/webauthn/registration';
 import { signMessage } from '@/lib/webauthn/authentication';
-import { saveCredential, getDefaultAccount, updateLastUsed } from '@/lib/storage/credentials';
+import { saveCredential, getDefaultAccount, updateLastUsed, getCredential, getAllCredentials } from '@/lib/storage/credentials';
 
 export function usePasskey() {
   const [loading, setLoading] = useState(false);
@@ -43,6 +43,48 @@ export function usePasskey() {
   }, []);
 
   /**
+   * Sign in with existing passkey (shows native picker)
+   */
+  const discoverPasskey = async (): Promise<WalletAccount> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Authenticate with existing passkey - this shows the native picker
+      const result = await authenticateWithPasskey();
+
+      // Look up the credential in IndexedDB
+      const credential = await getCredential(result.credentialId);
+
+      if (!credential) {
+        throw new Error('Passkey found but not registered in this app. Please create a new wallet.');
+      }
+
+      // Update last used
+      await updateLastUsed(result.credentialId);
+
+      // Create account from stored credential
+      const account: WalletAccount = {
+        address: credential.address,
+        credentialId: credential.id,
+        publicKeyX: credential.publicKeyX,
+        publicKeyY: credential.publicKeyY,
+        createdAt: credential.createdAt,
+        lastUsed: Date.now(),
+      };
+
+      setCurrentAccount(account);
+      return account;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to sign in with passkey');
+      setError(error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
    * Create a new wallet
    */
   const createWallet = async (username: string): Promise<WalletAccount> => {
@@ -50,7 +92,11 @@ export function usePasskey() {
     setError(null);
 
     try {
-      const result = await createPasskey(username, username);
+      // Get all existing credential IDs to exclude them
+      const existingCredentials = await getAllCredentials();
+      const excludeIds = existingCredentials.map(c => c.id);
+
+      const result = await createPasskey(username, username, excludeIds);
 
       // Save to IndexedDB
       const credential = {
@@ -112,6 +158,14 @@ export function usePasskey() {
     }
   };
 
+  /**
+   * Logout - clear current session
+   */
+  const logout = () => {
+    setCurrentAccount(null);
+    setError(null);
+  };
+
   return {
     loading,
     error,
@@ -119,6 +173,8 @@ export function usePasskey() {
     isSupported,
     isAvailable,
     createWallet,
+    discoverPasskey,
     signMessage: sign,
+    logout,
   };
 }
