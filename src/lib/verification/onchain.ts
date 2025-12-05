@@ -117,6 +117,23 @@ export async function verifyOnChain(
     const qx = toHex32(publicKeyX);
     const qy = toHex32(publicKeyY);
 
+    // Log the parameters being sent
+    console.group('🔗 On-Chain Verification Parameters');
+    console.log('Contract Address:', contractAddress);
+    console.log('Challenge (bytes):', challenge);
+    console.log('Auth Struct:', {
+      r: auth.r,
+      s: auth.s,
+      challengeIndex: auth.challengeIndex.toString(),
+      typeIndex: auth.typeIndex.toString(),
+      authenticatorData: auth.authenticatorData,
+      clientDataJSON: auth.clientDataJSON,
+    });
+    console.log('qx (bytes32):', qx);
+    console.log('qy (bytes32):', qy);
+    console.log('Auth as Array:', [auth.r, auth.s, auth.challengeIndex, auth.typeIndex, auth.authenticatorData, auth.clientDataJSON]);
+    console.groupEnd();
+
     // Call the contract
     const result = (await client.readContract({
       address: contractAddress,
@@ -125,6 +142,8 @@ export async function verifyOnChain(
       // @ts-expect-error - viem type inference is too strict for complex tuple types
       args: [challenge, auth, qx, qy],
     })) as boolean;
+
+    console.log('🔍 Verification Result:', result);
 
     return {
       success: result,

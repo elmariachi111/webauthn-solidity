@@ -194,44 +194,76 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
   const getAbiEncodedParameters = () => {
     if (!signature) return null;
 
-    // Encode challenge (bytes memory)
+    // Convert Uint8Array to Hex with proper padding
+    const toHex32 = (bytes: Uint8Array): `0x${string}` => {
+      const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      return ('0x' + hex.padStart(64, '0')) as `0x${string}`;
+    };
+
+    const toHexBytes = (bytes: Uint8Array): `0x${string}` => {
+      return ('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')) as `0x${string}`;
+    };
+
+    // Prepare values exactly as viem does for the contract call
     const challengeBytes = toBytes(signedMessage);
+    const challenge = toHexBytes(challengeBytes);
+
+    const authStruct = {
+      r: toHex32(signature.r),
+      s: toHex32(signature.s),
+      challengeIndex: BigInt(signature.challengeIndex),
+      typeIndex: BigInt(signature.typeIndex),
+      authenticatorData: toHexBytes(signature.authenticatorData),
+      clientDataJSON: signature.clientDataJSON,
+    };
+
+    const qx = toHex32(account.publicKeyX);
+    const qy = toHex32(account.publicKeyY);
+
+    // Encode individual parameters
     const encodedChallenge = encodeAbiParameters(
       parseAbiParameters('bytes'),
-      [toHex(challengeBytes)]
+      [challenge]
     );
 
-    // Encode WebAuthnAuth struct
-    // struct WebAuthnAuth { bytes32 r; bytes32 s; uint256 challengeIndex; uint256 typeIndex; bytes authenticatorData; string clientDataJSON; }
     const encodedAuth = encodeAbiParameters(
-      parseAbiParameters('(bytes32 r, bytes32 s, uint256 challengeIndex, uint256 typeIndex, bytes authenticatorData, string clientDataJSON)'),
-      [{
-        r: toHex(signature.r, { size: 32 }),
-        s: toHex(signature.s, { size: 32 }),
-        challengeIndex: BigInt(signature.challengeIndex),
-        typeIndex: BigInt(signature.typeIndex),
-        authenticatorData: toHex(signature.authenticatorData),
-        clientDataJSON: signature.clientDataJSON,
-      }]
+      parseAbiParameters('(bytes32,bytes32,uint256,uint256,bytes,string)'),
+      [[authStruct.r, authStruct.s, authStruct.challengeIndex, authStruct.typeIndex, authStruct.authenticatorData, authStruct.clientDataJSON]]
     );
 
-    // Encode qx (bytes32)
     const encodedQx = encodeAbiParameters(
       parseAbiParameters('bytes32'),
-      [toHex(account.publicKeyX, { size: 32 })]
+      [qx]
     );
 
-    // Encode qy (bytes32)
     const encodedQy = encodeAbiParameters(
       parseAbiParameters('bytes32'),
-      [toHex(account.publicKeyY, { size: 32 })]
+      [qy]
     );
+
+    // Format for Etherscan (array format)
+    const authEtherscanFormat = `["${authStruct.r}","${authStruct.s}",${authStruct.challengeIndex},${authStruct.typeIndex},"${authStruct.authenticatorData}","${authStruct.clientDataJSON.replace(/"/g, '\\"')}"]`;
+
+    // Log the displayed parameters for comparison
+    console.group('📋 Displayed ABI Parameters');
+    console.log('Challenge (raw):', challenge);
+    console.log('Auth Struct:', authStruct);
+    console.log('Auth (Etherscan format):', authEtherscanFormat);
+    console.log('Auth (ABI encoded):', encodedAuth);
+    console.log('qx:', qx);
+    console.log('qy:', qy);
+    console.groupEnd();
 
     return {
       challenge: encodedChallenge,
       auth: encodedAuth,
       qx: encodedQx,
       qy: encodedQy,
+      // Raw values for Etherscan
+      challengeRaw: challenge,
+      authEtherscan: authEtherscanFormat,
+      qxRaw: qx,
+      qyRaw: qy,
     };
   };
 
@@ -582,16 +614,40 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
 
                         <Separator />
 
-                        {/* Auth Struct */}
+                        {/* Auth Struct - Etherscan Format */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-medium text-purple-900">
-                              auth (WebAuthnAuth struct)
+                              auth (WebAuthnAuth) - For Etherscan
                             </span>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => copyAbiParameter(encoded.auth, 'auth struct')}
+                              onClick={() => copyAbiParameter(encoded.authEtherscan, 'auth struct (Etherscan format)')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {encoded.authEtherscan}
+                          </code>
+                          <p className="text-xs text-purple-600 mt-1">
+                            Paste this directly into Etherscan's tuple field
+                          </p>
+                        </div>
+
+                        <Separator />
+
+                        {/* Auth Struct - ABI Encoded */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              auth (ABI Encoded)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.auth, 'auth struct (ABI encoded)')}
                             >
                               Copy
                             </Button>
