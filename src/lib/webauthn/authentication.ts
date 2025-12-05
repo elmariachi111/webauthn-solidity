@@ -2,6 +2,7 @@
  * WebAuthn passkey authentication (signing)
  */
 
+import { keccak256, toBytes } from 'viem';
 import type { WebAuthnSignature, WebAuthnErrorType } from '../types';
 import { WebAuthnError } from '../types';
 import { base64UrlToBuffer, findChallengeOffset } from './utils';
@@ -333,12 +334,13 @@ export async function signMessage(
   message: string,
   credentialId: string
 ): Promise<WebAuthnSignature> {
-  // Hash the message to use as challenge
-  const encoder = new TextEncoder();
-  const data = encoder.encode(message);
+  // Hash the message with keccak256 to use as challenge (EVM-compatible)
+  const messageHash = keccak256(toBytes(message));
 
-  // Use message hash as challenge
-  const challenge = await crypto.subtle.digest('SHA-256', data);
+  // Convert hex string to Uint8Array (remove '0x' prefix)
+  const challenge = new Uint8Array(
+    messageHash.slice(2).match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+  );
 
-  return signWithPasskey(new Uint8Array(challenge), credentialId);
+  return signWithPasskey(challenge, credentialId);
 }

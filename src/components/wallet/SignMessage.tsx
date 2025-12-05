@@ -5,6 +5,7 @@
 'use client';
 
 import { useState } from 'react';
+import { keccak256, toBytes } from 'viem';
 import { toast } from 'sonner';
 import { CheckCircle2 } from 'lucide-react';
 import {
@@ -48,12 +49,8 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
 
       const sig = await signMessage(message);
 
-      // Calculate message hash
-      const encoder = new TextEncoder();
-      const data = encoder.encode(message);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      // Calculate message hash using keccak256 (EVM-compatible)
+      const hashHex = keccak256(toBytes(message));
 
       setSignedMessage(message);
       setMessageHash(hashHex);
@@ -226,7 +223,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                   {/* Message Hash */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Message Hash (SHA-256)</span>
+                      <span className="text-sm font-medium">Message Hash (keccak256)</span>
                       <Button
                         variant="ghost"
                         size="sm"
