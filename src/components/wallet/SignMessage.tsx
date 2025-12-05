@@ -121,6 +121,40 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     }
   };
 
+  const getContractParameters = () => {
+    if (!signature) return null;
+
+    // Convert byte arrays to 0x hex strings (padded to 32 bytes / 64 hex chars)
+    const toHex32 = (bytes: Uint8Array): string => {
+      return '0x' + Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+        .padStart(64, '0');
+    };
+
+    return {
+      messageHash: messageHash,
+      r: toHex32(signature.r),
+      s: toHex32(signature.s),
+      px: toHex32(account.publicKeyX),
+      py: toHex32(account.publicKeyY),
+    };
+  };
+
+  const copyContractParameters = async () => {
+    const params = getContractParameters();
+    if (!params) return;
+
+    const formatted = `verifySignature(\n  ${params.messageHash}, // messageHash\n  ${params.r}, // r\n  ${params.s}, // s\n  ${params.px}, // px\n  ${params.py}  // py\n)`;
+
+    try {
+      await navigator.clipboard.writeText(formatted);
+      toast.success('Contract parameters copied to clipboard');
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -353,6 +387,134 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                     <span className="text-muted-foreground">Challenge Offset</span>
                     <span className="font-mono">{signature.challengeOffset}</span>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Contract Parameters for On-Chain Verification */}
+              <Card className="border-blue-200 bg-blue-50/50">
+                <CardContent className="pt-6 space-y-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-900">
+                        On-Chain Verification Parameters
+                      </h4>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Use these parameters to verify the signature on-chain (Etherscan, Remix, Chisel)
+                      </p>
+                    </div>
+                    <Button
+                      onClick={copyContractParameters}
+                      variant="outline"
+                      size="sm"
+                      className="border-blue-300 hover:bg-blue-100"
+                    >
+                      Copy All
+                    </Button>
+                  </div>
+
+                  {(() => {
+                    const params = getContractParameters();
+                    if (!params) return null;
+
+                    return (
+                      <>
+                        {/* Message Hash */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">
+                              messageHash (bytes32)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copySignature(params.messageHash, 'messageHash')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {params.messageHash}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* R */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">r (uint256)</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copySignature(params.r, 'r')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {params.r}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* S */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">s (uint256)</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copySignature(params.s, 's')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {params.s}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* PX */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">px (uint256)</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copySignature(params.px, 'px')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {params.px}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* PY */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-blue-900">py (uint256)</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copySignature(params.py, 'py')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {params.py}
+                          </code>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
