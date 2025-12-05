@@ -2,107 +2,65 @@
  * WebAuthn passkey registration (wallet creation)
  */
 
-import { startRegistration } from '@simplewebauthn/browser';
+import { decode } from 'cbor-x';
 import type { P256PublicKey, PasskeyCreationResult, WebAuthnErrorType } from '../types';
 import { WebAuthnError } from '../types';
-import { base64UrlToBuffer, bufferToBase64Url, generateChallenge, parseAuthenticatorData } from './utils';
+import { bufferToBase64Url, bufferToHex, generateChallenge } from './utils';
 
 /**
- * Parse COSE public key to extract P-256 coordinates
- * COSE format: https://www.iana.org/assignments/cose/cose.xhtml
+ * Parse public key from attestation object using proper CBOR decoding
  */
-function parseCOSEPublicKey(coseKey: Uint8Array): P256PublicKey {
-  // Parse CBOR-encoded COSE key
-  // For P-256, we're looking for:
-  // - kty (1): 2 (EC2)
-  // - alg (3): -7 (ES256)
-  // - crv (-1): 1 (P-256)
-  // - x (-2): x coordinate (32 bytes)
-  // - y (-3): y coordinate (32 bytes)
+function parsePublicKeyFromAttestation(attestationObject: ArrayBuffer): P256PublicKey {
+  // Decode CBOR attestation object
+  const attestation = decode(new Uint8Array(attestationObject));
 
-  const dataView = new DataView(coseKey.buffer, coseKey.byteOffset, coseKey.byteLength);
-  let offset = 0;
+  // Extract the authData
+  const authData = attestation.authData;
 
-  // Simple CBOR parser for COSE key structure
-  // This is a simplified version - for production, use a proper CBOR library
+  // The credential public key starts after:
+  // - rpIdHash: 32 bytes
+  // - flags: 1 byte
+  // - signCount: 4 bytes
+  // - aaguid: 16 bytes
+  // - credentialIdLength: 2 bytes
+  // - credentialId: credentialIdLength bytes
 
-  // Skip initial map header (0xa5 = map with 5 elements or 0xa4 = 4 elements)
-  if (coseKey[offset] === 0xa5 || coseKey[offset] === 0xa4) {
-    offset++;
+  let offset = 32 + 1 + 4 + 16;
+
+  // Read credential ID length (big-endian uint16)
+  const credentialIdLength = (authData[offset] << 8) | authData[offset + 1];
+  offset += 2 + credentialIdLength;
+
+  // The rest is the COSE key (CBOR-encoded)
+  const coseKeyBytes = authData.slice(offset);
+  const coseKey = decode(coseKeyBytes);
+
+  // COSE key format for P-256:
+  // {
+  //   1: 2,        // kty: EC2
+  //   3: -7,       // alg: ES256
+  //   -1: 1,       // crv: P-256
+  //   -2: x,       // x coordinate (32 bytes)
+  //   -3: y        // y coordinate (32 bytes)
+  // }
+
+  let x: Uint8Array, y: Uint8Array;
+
+  if (coseKey instanceof Map) {
+    x = coseKey.get(-2);
+    y = coseKey.get(-3);
+  } else if (typeof coseKey === 'object') {
+    x = coseKey[-2] || coseKey['-2'];
+    y = coseKey[-3] || coseKey['-3'];
   } else {
     throw new Error('Invalid COSE key format');
-  }
-
-  let x: Uint8Array | null = null;
-  let y: Uint8Array | null = null;
-
-  // Parse key-value pairs
-  while (offset < coseKey.length && (!x || !y)) {
-    // Read key
-    const keyByte = coseKey[offset];
-
-    if (keyByte === 0x01 || keyByte === 0x03) {
-      // kty or alg - skip
-      offset++;
-      offset++; // skip value
-    } else if (keyByte === 0x20) {
-      // -1 (crv) as positive integer
-      offset++;
-      offset++; // skip value (should be 1 for P-256)
-    } else if (keyByte === 0x21) {
-      // -2 (x coordinate) as positive integer
-      offset++;
-      // Next byte should be 0x58 0x20 (byte string of length 32)
-      if (coseKey[offset] === 0x58 && coseKey[offset + 1] === 0x20) {
-        offset += 2;
-        x = coseKey.slice(offset, offset + 32);
-        offset += 32;
-      } else {
-        throw new Error('Invalid x coordinate format');
-      }
-    } else if (keyByte === 0x22) {
-      // -3 (y coordinate) as positive integer
-      offset++;
-      // Next byte should be 0x58 0x20 (byte string of length 32)
-      if (coseKey[offset] === 0x58 && coseKey[offset + 1] === 0x20) {
-        offset += 2;
-        y = coseKey.slice(offset, offset + 32);
-        offset += 32;
-      } else {
-        throw new Error('Invalid y coordinate format');
-      }
-    } else {
-      offset++;
-    }
   }
 
   if (!x || !y) {
     throw new Error('Failed to extract P-256 coordinates from COSE key');
   }
 
-  return { x, y };
-}
-
-/**
- * Extract public key from WebAuthn credential
- */
-export function extractPublicKey(credential: PublicKeyCredential): P256PublicKey {
-  const response = credential.response as AuthenticatorAttestationResponse;
-
-  // Get attestation object
-  const attestationObject = new Uint8Array(response.attestationObject);
-
-  // Parse authenticator data
-  const parsedAuthData = parseAuthenticatorData(attestationObject);
-
-  if (!parsedAuthData.attestedCredentialData) {
-    throw new Error('No attested credential data in authenticator response');
-  }
-
-  // Parse COSE public key
-  const publicKey = parseCOSEPublicKey(parsedAuthData.attestedCredentialData.credentialPublicKey);
-
-  return publicKey;
+  return { x: new Uint8Array(x), y: new Uint8Array(y) };
 }
 
 /**
@@ -149,7 +107,11 @@ export async function createPasskey(
         pubKeyCredParams: [
           {
             type: 'public-key',
-            alg: -7, // ES256 (P-256)
+            alg: -7, // ES256 (P-256) - Primary algorithm
+          },
+          {
+            type: 'public-key',
+            alg: -257, // RS256 - Included for compatibility
           },
         ],
         authenticatorSelection: {
@@ -169,18 +131,9 @@ export async function createPasskey(
       );
     }
 
-    // Extract public key using simplewebauthn helper
+    // Extract public key from attestation object
     const response = credential.response as AuthenticatorAttestationResponse;
-    const attestationObject = new Uint8Array(response.attestationObject);
-
-    // Parse authenticator data to get public key
-    const authData = parseAuthenticatorData(attestationObject);
-
-    if (!authData.attestedCredentialData) {
-      throw new Error('No credential data in attestation');
-    }
-
-    const publicKey = parseCOSEPublicKey(authData.attestedCredentialData.credentialPublicKey);
+    const publicKey = parsePublicKeyFromAttestation(response.attestationObject);
 
     // Import crypto utilities for address derivation
     const { publicKeyToAddress } = await import('../crypto/address');

@@ -7,7 +7,26 @@ import { WebAuthnError } from '../types';
 import { base64UrlToBuffer, bufferToBase64Url, findChallengeOffset } from './utils';
 
 /**
- * Parse DER-encoded signature to extract r and s values
+ * Pad byte array to 32 bytes
+ */
+function padTo32Bytes(bytes: Uint8Array): Uint8Array {
+  if (bytes.length === 32) {
+    return bytes;
+  }
+
+  if (bytes.length > 32) {
+    // Should not happen for P-256, but handle it
+    return bytes.slice(bytes.length - 32);
+  }
+
+  // Pad with leading zeros
+  const padded = new Uint8Array(32);
+  padded.set(bytes, 32 - bytes.length);
+  return padded;
+}
+
+/**
+ * Parse DER-encoded signature to extract r and s values with malleability normalization
  * DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
  */
 function parseDERSignature(derSig: Uint8Array): { r: Uint8Array; s: Uint8Array } {
@@ -20,7 +39,6 @@ function parseDERSignature(derSig: Uint8Array): { r: Uint8Array; s: Uint8Array }
   offset++;
 
   // Skip total length
-  const totalLength = derSig[offset];
   offset++;
 
   // Parse r value
@@ -29,23 +47,18 @@ function parseDERSignature(derSig: Uint8Array): { r: Uint8Array; s: Uint8Array }
   }
   offset++;
 
-  const rLength = derSig[offset];
+  let rLength = derSig[offset];
   offset++;
 
-  let r = derSig.slice(offset, offset + rLength);
-  offset += rLength;
-
-  // Remove leading zero if present (added for sign bit)
-  if (r.length === 33 && r[0] === 0x00) {
-    r = r.slice(1);
+  // Extract r (skip leading zero if present)
+  let rOffset = offset;
+  if (derSig[rOffset] === 0x00) {
+    rOffset++;
+    rLength--;
   }
 
-  // Pad to 32 bytes if needed
-  if (r.length < 32) {
-    const padded = new Uint8Array(32);
-    padded.set(r, 32 - r.length);
-    r = padded;
-  }
+  const r = derSig.slice(rOffset, rOffset + rLength);
+  offset = rOffset + rLength;
 
   // Parse s value
   if (derSig[offset] !== 0x02) {
@@ -53,24 +66,40 @@ function parseDERSignature(derSig: Uint8Array): { r: Uint8Array; s: Uint8Array }
   }
   offset++;
 
-  const sLength = derSig[offset];
+  let sLength = derSig[offset];
   offset++;
 
-  let s = derSig.slice(offset, offset + sLength);
-
-  // Remove leading zero if present
-  if (s.length === 33 && s[0] === 0x00) {
-    s = s.slice(1);
+  // Extract s (skip leading zero if present)
+  let sOffset = offset;
+  if (derSig[sOffset] === 0x00) {
+    sOffset++;
+    sLength--;
   }
+
+  const s = derSig.slice(sOffset, sOffset + sLength);
 
   // Pad to 32 bytes if needed
-  if (s.length < 32) {
-    const padded = new Uint8Array(32);
-    padded.set(s, 32 - s.length);
-    s = padded;
+  const rPadded = padTo32Bytes(r);
+  let sPadded = padTo32Bytes(s);
+
+  // Normalize s to prevent signature malleability
+  // If s > N/2, replace with N - s
+  // secp256r1 curve order N
+  const N = BigInt('0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551');
+  const N_half = N / 2n;
+
+  const sBigInt = BigInt('0x' + Array.from(sPadded).map(b => b.toString(16).padStart(2, '0')).join(''));
+
+  if (sBigInt > N_half) {
+    const sNormalized = N - sBigInt;
+    const sNormalizedHex = sNormalized.toString(16).padStart(64, '0');
+    sPadded = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      sPadded[i] = parseInt(sNormalizedHex.slice(i * 2, i * 2 + 2), 16);
+    }
   }
 
-  return { r, s };
+  return { r: rPadded, s: sPadded };
 }
 
 /**
