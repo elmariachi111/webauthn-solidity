@@ -5,7 +5,7 @@
 'use client';
 
 import { useState } from 'react';
-import { encodeAbiParameters, parseAbiParameters, toBytes, toHex } from 'viem';
+import { encodeAbiParameters, parseAbiParameters, toBytes, toHex, encodeFunctionData } from 'viem';
 import { toast } from 'sonner';
 import { CheckCircle2, Link as LinkIcon } from 'lucide-react';
 import {
@@ -220,14 +220,50 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     const qx = toHex32(account.publicKeyX);
     const qy = toHex32(account.publicKeyY);
 
-    // Encode individual parameters
+    // Use the same ABI as the contract call
+    const contractABI = [
+      {
+        inputs: [
+          { name: 'challenge', type: 'bytes' },
+          {
+            name: 'auth',
+            type: 'tuple',
+            components: [
+              { name: 'r', type: 'bytes32' },
+              { name: 's', type: 'bytes32' },
+              { name: 'challengeIndex', type: 'uint256' },
+              { name: 'typeIndex', type: 'uint256' },
+              { name: 'authenticatorData', type: 'bytes' },
+              { name: 'clientDataJSON', type: 'string' },
+            ],
+          },
+          { name: 'qx', type: 'bytes32' },
+          { name: 'qy', type: 'bytes32' },
+        ],
+        name: 'verifyWebauthn',
+        outputs: [{ name: '', type: 'bool' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ] as const;
+
+    // Encode the full function call to get exact calldata
+    const calldata = encodeFunctionData({
+      abi: contractABI,
+      functionName: 'verifyWebauthn',
+      args: [challenge, authStruct, qx, qy],
+    });
+
+    // Encode individual parameters for display
     const encodedChallenge = encodeAbiParameters(
       parseAbiParameters('bytes'),
       [challenge]
     );
 
+    // Encode auth as a tuple (matching the contract ABI)
     const encodedAuth = encodeAbiParameters(
       parseAbiParameters('(bytes32,bytes32,uint256,uint256,bytes,string)'),
+      // @ts-ignore - viem strict typing issue with tuple
       [[authStruct.r, authStruct.s, authStruct.challengeIndex, authStruct.typeIndex, authStruct.authenticatorData, authStruct.clientDataJSON]]
     );
 
@@ -249,7 +285,8 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     console.log('Challenge (raw):', challenge);
     console.log('Auth Struct:', authStruct);
     console.log('Auth (Etherscan format):', authEtherscanFormat);
-    console.log('Auth (ABI encoded):', encodedAuth);
+    console.log('Auth (ABI encoded as tuple):', encodedAuth);
+    console.log('Full calldata:', calldata);
     console.log('qx:', qx);
     console.log('qy:', qy);
     console.groupEnd();
@@ -259,6 +296,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
       auth: encodedAuth,
       qx: encodedQx,
       qy: encodedQy,
+      calldata: calldata,
       // Raw values for Etherscan
       challengeRaw: challenge,
       authEtherscan: authEtherscanFormat,
@@ -538,53 +576,16 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                 </CardContent>
               </Card>
 
-              {/* OpenZeppelin WebAuthn Parameters */}
-              <Card className="border-blue-200 bg-blue-50/50">
-                <CardContent className="pt-6 space-y-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <h4 className="text-sm font-semibold text-blue-900">
-                        OpenZeppelin WebAuthn Parameters
-                      </h4>
-                      <p className="text-xs text-blue-700 mt-1">
-                        Use these parameters with OpenZeppelin's WebAuthn library
-                      </p>
-                    </div>
-                    <Button
-                      onClick={copyWebAuthnParameters}
-                      variant="outline"
-                      size="sm"
-                      className="border-blue-300 hover:bg-blue-100"
-                    >
-                      Copy JSON
-                    </Button>
-                  </div>
-
-                  {(() => {
-                    const params = getWebAuthnParameters();
-                    if (!params) return null;
-
-                    return (
-                      <div className="space-y-2">
-                        <code className="block p-4 bg-white rounded-md text-xs break-all font-mono whitespace-pre-wrap">
-                          {JSON.stringify(params, null, 2)}
-                        </code>
-                      </div>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
+              
 
               {/* ABI Encoded Parameters */}
               <Card className="border-purple-200 bg-purple-50/50">
                 <CardContent className="pt-6 space-y-4">
                   <div>
                     <h4 className="text-sm font-semibold text-purple-900 mb-1">
-                      ABI Encoded Parameters
+                      CLI Contract Call
                     </h4>
-                    <p className="text-xs text-purple-700">
-                      Copy these encoded parameters for CLI tools (cast, chisel, etc.)
-                    </p>
+                    
                   </div>
 
                   {(() => {
@@ -593,6 +594,30 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
 
                     return (
                       <div className="space-y-4">
+                        {/* Full Calldata */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              Full Calldata (Complete Function Call)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.calldata, 'Full Calldata')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            cast call --rpc-url={process.env.NEXT_PUBLIC_RPC_URL} {process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS} {encoded.calldata}
+                          </code>
+                          <p className="text-xs text-purple-600 mt-1">
+                            This is the exact data sent to the contract
+                          </p>
+                        </div>
+
+                        <Separator />
+
                         {/* Challenge */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
@@ -618,7 +643,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-medium text-purple-900">
-                              auth (WebAuthnAuth) - For Etherscan
+                              auth tuple (WebAuthnAuth)
                             </span>
                             <Button
                               variant="ghost"
@@ -631,34 +656,11 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                           <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
                             {encoded.authEtherscan}
                           </code>
-                          <p className="text-xs text-purple-600 mt-1">
-                            Paste this directly into Etherscan's tuple field
-                          </p>
                         </div>
 
                         <Separator />
 
-                        {/* Auth Struct - ABI Encoded */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-purple-900">
-                              auth (ABI Encoded)
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => copyAbiParameter(encoded.auth, 'auth struct (ABI encoded)')}
-                            >
-                              Copy
-                            </Button>
-                          </div>
-                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
-                            {encoded.auth}
-                          </code>
-                        </div>
-
-                        <Separator />
-
+                        
                         {/* qx */}
                         <div>
                           <div className="flex items-center justify-between mb-2">
