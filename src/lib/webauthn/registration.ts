@@ -105,7 +105,7 @@ export async function authenticateWithPasskey(): Promise<PasskeyCreationResult> 
     return {
       credentialId: assertion.id,
       publicKey: { x: new Uint8Array(0), y: new Uint8Array(0) }, // Placeholder - will be filled from storage
-      address: '', // Will be filled from storage
+      identifier: '', // Will be filled from storage
     };
   } catch (error) {
     if (error instanceof WebAuthnError) {
@@ -202,14 +202,14 @@ export async function createPasskey(
     const response = credential.response as AuthenticatorAttestationResponse;
     const publicKey = parsePublicKeyFromAttestation(response.attestationObject);
 
-    // Import crypto utilities for address derivation
-    const { publicKeyToAddress } = await import('../crypto/address');
-    const address = publicKeyToAddress(publicKey.x, publicKey.y);
+    // Import crypto utilities for public key identifier generation
+    const { publicKeyToIdentifier } = await import('../crypto/address');
+    const identifier = publicKeyToIdentifier(publicKey.x, publicKey.y);
 
     return {
       credentialId: bufferToBase64Url(new Uint8Array(credential.rawId)),
       publicKey,
-      address,
+      identifier,
     };
   } catch (error) {
     if (error instanceof WebAuthnError) {

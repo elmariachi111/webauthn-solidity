@@ -74,10 +74,6 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     try {
       setVerificationStatus('pending');
 
-      console.log('Starting verification...');
-      console.log('Message:', signedMessage);
-      console.log('Account address:', account.address);
-
       const isValid = await verifySignature(
         signedMessage,
         {
@@ -188,10 +184,10 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                     <div className="space-y-1">
                       <p className="font-medium">Signature verified successfully!</p>
                       <p className="text-sm">
-                        The message was rightfully signed by public key:
+                        The message was rightfully signed by P-256 public key:
                       </p>
                       <code className="text-xs break-all block mt-1">
-                        {account.address}
+                        {account.identifier}
                       </code>
                     </div>
                   </AlertDescription>

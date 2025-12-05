@@ -65,7 +65,7 @@ export function usePasskey() {
 
       // Create account from stored credential
       const account: WalletAccount = {
-        address: credential.address,
+        identifier: credential.identifier,
         credentialId: credential.id,
         publicKeyX: credential.publicKeyX,
         publicKeyY: credential.publicKeyY,
@@ -101,7 +101,7 @@ export function usePasskey() {
         id: result.credentialId,
         publicKeyX: result.publicKey.x,
         publicKeyY: result.publicKey.y,
-        address: result.address,
+        identifier: result.identifier,
         createdAt: Date.now(),
         lastUsed: Date.now(),
       };
@@ -110,7 +110,7 @@ export function usePasskey() {
 
       // Update current account
       const account: WalletAccount = {
-        address: result.address,
+        identifier: result.identifier,
         credentialId: result.credentialId,
         publicKeyX: result.publicKey.x,
         publicKeyY: result.publicKey.y,

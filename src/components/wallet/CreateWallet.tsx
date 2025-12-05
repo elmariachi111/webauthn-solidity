@@ -21,7 +21,7 @@ interface CreateWalletProps {
 export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
   const [username, setUsername] = useState('');
   const { createWallet, discoverPasskey, loading, error } = usePasskey();
-  const [createdAddress, setCreatedAddress] = useState<string | null>(null);
+  const [createdIdentifier, setCreatedIdentifier] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +37,7 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
       const account = await createWallet(username);
 
       toast.success('Wallet created successfully!', { id: 'create-wallet' });
-      setCreatedAddress(account.address);
+      setCreatedIdentifier(account.identifier);
       setUsername('');
 
       if (onWalletCreated) {
@@ -57,7 +57,7 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
       const account = await discoverPasskey();
 
       toast.success('Signed in successfully!', { id: 'sign-in' });
-      setCreatedAddress(account.address);
+      setCreatedIdentifier(account.identifier);
 
       if (onWalletCreated) {
         onWalletCreated();
@@ -69,7 +69,7 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
     }
   };
 
-  if (createdAddress) {
+  if (createdIdentifier) {
     return (
       <Card>
         <CardHeader>
@@ -78,16 +78,16 @@ export function CreateWallet({ onWalletCreated }: CreateWalletProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Ethereum Address</Label>
+            <Label>Public Key Identifier</Label>
             <div className="mt-2 p-3 bg-muted rounded-md font-mono text-sm break-all">
-              {createdAddress}
+              {createdIdentifier}
             </div>
           </div>
           <Badge variant="outline" className="text-green-600 border-green-600">
             ✓ Secured with biometric authentication
           </Badge>
           <Button
-            onClick={() => setCreatedAddress(null)}
+            onClick={() => setCreatedIdentifier(null)}
             variant="outline"
             className="w-full"
           >

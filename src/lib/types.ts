@@ -12,8 +12,8 @@ export interface Credential {
   publicKeyX: Uint8Array;
   /** P-256 public key Y coordinate */
   publicKeyY: Uint8Array;
-  /** Ethereum address derived from public key */
-  address: string;
+  /** Base64-encoded public key identifier (NOT an Ethereum address) */
+  identifier: string;
   /** Timestamp when credential was created */
   createdAt: number;
   /** Timestamp when credential was last used */
@@ -41,11 +41,11 @@ export interface WebAuthnSignature {
 }
 
 /**
- * Wallet account combining credential and address
+ * Wallet account combining credential and public key identifier
  */
 export interface WalletAccount {
-  /** Ethereum address */
-  address: string;
+  /** Base64-encoded public key identifier (NOT an Ethereum address) */
+  identifier: string;
   /** Credential ID reference */
   credentialId: string;
   /** P-256 public key X coordinate */
@@ -76,8 +76,8 @@ export interface PasskeyCreationResult {
   credentialId: string;
   /** The public key */
   publicKey: P256PublicKey;
-  /** Derived Ethereum address */
-  address: string;
+  /** Base64-encoded public key identifier (NOT an Ethereum address) */
+  identifier: string;
 }
 
 /**

@@ -1,19 +1,17 @@
 /**
- * Ethereum address derivation from P-256 public keys
+ * P-256 public key encoding utilities
+ *
+ * Note: P-256 keys are NOT Ethereum addresses. These are secp256r1 keys
+ * used for WebAuthn/passkey authentication, encoded for display and storage.
  */
-
-import { getAddress, keccak256 } from 'viem';
 
 /**
- * Derive Ethereum address from P-256 public key coordinates
+ * Derive a unique identifier from P-256 public key coordinates using base64 encoding
  *
- * Process:
- * 1. Concatenate x and y coordinates (uncompressed format: 0x04 || x || y)
- * 2. Hash with Keccak-256
- * 3. Take last 20 bytes as Ethereum address
- * 4. Apply EIP-55 checksum
+ * This creates a compact, URL-safe identifier for the public key by encoding
+ * the uncompressed public key format (0x04 || x || y) as base64.
  */
-export function publicKeyToAddress(x: Uint8Array, y: Uint8Array): string {
+export function publicKeyToIdentifier(x: Uint8Array, y: Uint8Array): string {
   // Ensure coordinates are 32 bytes each
   if (x.length !== 32 || y.length !== 32) {
     throw new Error('Public key coordinates must be 32 bytes each');
@@ -25,18 +23,12 @@ export function publicKeyToAddress(x: Uint8Array, y: Uint8Array): string {
   uncompressed.set(x, 1);
   uncompressed.set(y, 33);
 
-  // Hash with Keccak-256
-  const hash = keccak256(uncompressed);
-
-  // Take last 20 bytes (40 hex chars) as address
-  const address = '0x' + hash.slice(-40);
-
-  // Apply EIP-55 checksum and return
-  return getAddress(address);
+  // Encode as base64 for compact, human-readable representation
+  return btoa(String.fromCharCode(...uncompressed));
 }
 
 /**
- * Convert public key to uncompressed hex format
+ * Convert public key to hex format (for debugging/display)
  */
 export function publicKeyToHex(x: Uint8Array, y: Uint8Array): string {
   const uncompressed = new Uint8Array(65);
@@ -44,25 +36,26 @@ export function publicKeyToHex(x: Uint8Array, y: Uint8Array): string {
   uncompressed.set(x, 1);
   uncompressed.set(y, 33);
 
-  return '0x' + Array.from(uncompressed)
+  return Array.from(uncompressed)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
 /**
- * Format public key for display
+ * Format public key coordinates for display
  */
 export function formatPublicKey(x: Uint8Array, y: Uint8Array): {
   x: string;
   y: string;
   uncompressed: string;
 } {
-  const xHex = '0x' + Array.from(x).map(b => b.toString(16).padStart(2, '0')).join('');
-  const yHex = '0x' + Array.from(y).map(b => b.toString(16).padStart(2, '0')).join('');
+  // Encode coordinates as base64 for cleaner display
+  const xBase64 = btoa(String.fromCharCode(...x));
+  const yBase64 = btoa(String.fromCharCode(...y));
 
   return {
-    x: xHex,
-    y: yHex,
-    uncompressed: publicKeyToHex(x, y),
+    x: xBase64,
+    y: yBase64,
+    uncompressed: publicKeyToIdentifier(x, y),
   };
 }

@@ -53,7 +53,7 @@ export async function getDefaultAccount(): Promise<WalletAccount | null> {
   const credential = credentials[0];
 
   return {
-    address: credential.address,
+    identifier: credential.identifier,
     credentialId: credential.id,
     publicKeyX: credential.publicKeyX,
     publicKeyY: credential.publicKeyY,
@@ -69,7 +69,7 @@ export async function listAllAccounts(): Promise<WalletAccount[]> {
   const credentials = await db.credentials.orderBy('createdAt').reverse().toArray();
 
   return credentials.map((credential) => ({
-    address: credential.address,
+    identifier: credential.identifier,
     credentialId: credential.id,
     publicKeyX: credential.publicKeyX,
     publicKeyY: credential.publicKeyY,

@@ -45,20 +45,20 @@ export function WalletDashboard({ account, onLogout }: WalletDashboardProps) {
           <CardDescription>Secured with biometric authentication</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Ethereum Address */}
+          {/* Public Key Identifier */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Ethereum Address</span>
+              <span className="text-sm font-medium">Public Key Identifier</span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copyToClipboard(account.address, 'Address')}
+                onClick={() => copyToClipboard(account.identifier, 'Identifier')}
               >
                 Copy
               </Button>
             </div>
             <div className="p-3 bg-muted rounded-md font-mono text-sm break-all">
-              {account.address}
+              {account.identifier}
             </div>
           </div>
 
@@ -114,9 +114,9 @@ export function WalletDashboard({ account, onLogout }: WalletDashboardProps) {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => copyToClipboard(account.address, 'Address')}
+                onClick={() => copyToClipboard(account.identifier, 'Identifier')}
               >
-                Copy Address
+                Copy Identifier
               </Button>
               <Button
                 variant="outline"

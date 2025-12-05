@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Passkey Wallet",
-  description: "Ethereum wallet secured by WebAuthn passkeys",
+  description: "Control wallets with WebAuthn passkeys using P-256 signatures",
 };
 
 export default function RootLayout({
@@ -33,7 +33,7 @@ export default function RootLayout({
             <div className="container mx-auto px-4 py-4">
               <h1 className="text-2xl font-bold">🔐 Passkey Wallet</h1>
               <p className="text-sm text-muted-foreground">
-                Ethereum wallet secured with biometric authentication
+                P-256 signature derived from biometric authentication
               </p>
             </div>
           </header>

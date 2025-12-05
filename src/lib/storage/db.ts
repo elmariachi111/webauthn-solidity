@@ -14,8 +14,14 @@ export class PasskeyWalletDB extends Dexie {
   constructor() {
     super('PasskeyWalletDB');
 
+    // Version 1: Initial schema with 'address' field (deprecated)
     this.version(1).stores({
       credentials: 'id, address, createdAt, lastUsed',
+    });
+
+    // Version 2: Updated schema with 'identifier' field instead of 'address'
+    this.version(2).stores({
+      credentials: 'id, identifier, createdAt, lastUsed',
     });
   }
 }
