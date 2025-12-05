@@ -279,7 +279,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
           {/* Signature Display */}
           {signature && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="space-y-3">
                 <h3 className="text-lg font-semibold">Signature</h3>
                 <div className="flex gap-2">
                   <Button
@@ -341,7 +341,19 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                     <div className="space-y-1">
                       <p className="font-medium">Signature verified on-chain successfully!</p>
                       <p className="text-sm">
-                        The signature was verified using the P256Verifier contract at {process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS}
+                        The signature was verified using the P256Verifier contract at{' '}
+                        {process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL ? (
+                          <a
+                            href={`${process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL}/address/${process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-green-900 font-mono"
+                          >
+                            {process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS}
+                          </a>
+                        ) : (
+                          <span className="font-mono">{process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS}</span>
+                        )}
                       </p>
                     </div>
                   </AlertDescription>
