@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { encodeAbiParameters, parseAbiParameters, toBytes, toHex } from 'viem';
 import { toast } from 'sonner';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Link as LinkIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { WalletAccount, WebAuthnSignature } from '@/lib/types';
 import { usePasskey } from '@/hooks/usePasskey';
 import { formatSignatureForChain, verifySignature } from '@/lib/webauthn/authentication';
+import { verifyOnChain, isOnChainVerificationAvailable } from '@/lib/verification/onchain';
 
 interface SignMessageProps {
   account: WalletAccount;
@@ -35,6 +36,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
   const [signedMessage, setSignedMessage] = useState('');
   const [signature, setSignature] = useState<WebAuthnSignature | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'failed' | null>(null);
+  const [onChainVerificationStatus, setOnChainVerificationStatus] = useState<'pending' | 'verified' | 'failed' | null>(null);
   const { signMessage, loading } = usePasskey();
 
   const handleSign = async () => {
@@ -90,6 +92,34 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
       console.error('Verification error:', err);
       setVerificationStatus('failed');
       toast.error('Failed to verify signature');
+    }
+  };
+
+  const handleVerifyOnChain = async () => {
+    if (!signature || !signedMessage) return;
+
+    try {
+      setOnChainVerificationStatus('pending');
+      toast.loading('Verifying signature on-chain...', { id: 'onchain-verify' });
+
+      const result = await verifyOnChain(
+        signedMessage,
+        signature,
+        account.publicKeyX,
+        account.publicKeyY
+      );
+
+      if (result.success) {
+        setOnChainVerificationStatus('verified');
+        toast.success('Signature verified on-chain successfully!', { id: 'onchain-verify' });
+      } else {
+        setOnChainVerificationStatus('failed');
+        toast.error(result.error || 'On-chain verification failed!', { id: 'onchain-verify' });
+      }
+    } catch (err) {
+      console.error('On-chain verification error:', err);
+      setOnChainVerificationStatus('failed');
+      toast.error('Failed to verify signature on-chain', { id: 'onchain-verify' });
     }
   };
 
@@ -260,6 +290,17 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                   >
                     {verificationStatus === 'pending' ? 'Verifying...' : 'Verify Signature'}
                   </Button>
+                  {isOnChainVerificationAvailable() && (
+                    <Button
+                      onClick={handleVerifyOnChain}
+                      variant="default"
+                      size="sm"
+                      disabled={onChainVerificationStatus === 'pending'}
+                    >
+                      <LinkIcon className="h-4 w-4 mr-1" />
+                      {onChainVerificationStatus === 'pending' ? 'Verifying...' : 'Verify On-Chain'}
+                    </Button>
+                  )}
                   <Button onClick={copyFullSignature} variant="outline" size="sm">
                     Copy All
                   </Button>
@@ -288,6 +329,29 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                 <Alert className="bg-red-50 border-red-200">
                   <AlertDescription className="text-red-800">
                     Signature verification failed! The signature does not match the message or public key.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* On-Chain Verification Result */}
+              {onChainVerificationStatus === 'verified' && (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    <div className="space-y-1">
+                      <p className="font-medium">Signature verified on-chain successfully!</p>
+                      <p className="text-sm">
+                        The signature was verified using the P256Verifier contract at {process.env.NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS}
+                      </p>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {onChainVerificationStatus === 'failed' && (
+                <Alert className="bg-red-50 border-red-200">
+                  <AlertDescription className="text-red-800">
+                    On-chain verification failed! Check that the contract is deployed and RPC is accessible.
                   </AlertDescription>
                 </Alert>
               )}
@@ -577,6 +641,7 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                   onClick={() => {
                     setSignature(null);
                     setVerificationStatus(null);
+                    setOnChainVerificationStatus(null);
                     setSignedMessage('');
                   }}
                   variant="outline"
