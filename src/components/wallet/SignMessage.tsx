@@ -5,6 +5,7 @@
 'use client';
 
 import { useState } from 'react';
+import { encodeAbiParameters, parseAbiParameters, toBytes, toHex } from 'viem';
 import { toast } from 'sonner';
 import { CheckCircle2 } from 'lucide-react';
 import {
@@ -155,6 +156,59 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
     try {
       await navigator.clipboard.writeText(formatted);
       toast.success('WebAuthn parameters copied to clipboard');
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const getAbiEncodedParameters = () => {
+    if (!signature) return null;
+
+    // Encode challenge (bytes memory)
+    const challengeBytes = toBytes(signedMessage);
+    const encodedChallenge = encodeAbiParameters(
+      parseAbiParameters('bytes'),
+      [toHex(challengeBytes)]
+    );
+
+    // Encode WebAuthnAuth struct
+    // struct WebAuthnAuth { bytes32 r; bytes32 s; uint256 challengeIndex; uint256 typeIndex; bytes authenticatorData; string clientDataJSON; }
+    const encodedAuth = encodeAbiParameters(
+      parseAbiParameters('(bytes32 r, bytes32 s, uint256 challengeIndex, uint256 typeIndex, bytes authenticatorData, string clientDataJSON)'),
+      [{
+        r: toHex(signature.r, { size: 32 }),
+        s: toHex(signature.s, { size: 32 }),
+        challengeIndex: BigInt(signature.challengeIndex),
+        typeIndex: BigInt(signature.typeIndex),
+        authenticatorData: toHex(signature.authenticatorData),
+        clientDataJSON: signature.clientDataJSON,
+      }]
+    );
+
+    // Encode qx (bytes32)
+    const encodedQx = encodeAbiParameters(
+      parseAbiParameters('bytes32'),
+      [toHex(account.publicKeyX, { size: 32 })]
+    );
+
+    // Encode qy (bytes32)
+    const encodedQy = encodeAbiParameters(
+      parseAbiParameters('bytes32'),
+      [toHex(account.publicKeyY, { size: 32 })]
+    );
+
+    return {
+      challenge: encodedChallenge,
+      auth: encodedAuth,
+      qx: encodedQx,
+      qy: encodedQy,
+    };
+  };
+
+  const copyAbiParameter = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied to clipboard`);
     } catch (err) {
       toast.error('Failed to copy to clipboard');
     }
@@ -407,6 +461,111 @@ export function SignMessage({ account, onClose }: SignMessageProps) {
                         <code className="block p-4 bg-white rounded-md text-xs break-all font-mono whitespace-pre-wrap">
                           {JSON.stringify(params, null, 2)}
                         </code>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* ABI Encoded Parameters */}
+              <Card className="border-purple-200 bg-purple-50/50">
+                <CardContent className="pt-6 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-purple-900 mb-1">
+                      ABI Encoded Parameters
+                    </h4>
+                    <p className="text-xs text-purple-700">
+                      Copy these encoded parameters for CLI tools (cast, chisel, etc.)
+                    </p>
+                  </div>
+
+                  {(() => {
+                    const encoded = getAbiEncodedParameters();
+                    if (!encoded) return null;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Challenge */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              challenge (bytes)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.challenge, 'challenge')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {encoded.challenge}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* Auth Struct */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              auth (WebAuthnAuth struct)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.auth, 'auth struct')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {encoded.auth}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* qx */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              qx (bytes32)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.qx, 'qx')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {encoded.qx}
+                          </code>
+                        </div>
+
+                        <Separator />
+
+                        {/* qy */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-purple-900">
+                              qy (bytes32)
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyAbiParameter(encoded.qy, 'qy')}
+                            >
+                              Copy
+                            </Button>
+                          </div>
+                          <code className="block p-3 bg-white rounded-md text-xs break-all font-mono">
+                            {encoded.qy}
+                          </code>
+                        </div>
                       </div>
                     );
                   })()}
